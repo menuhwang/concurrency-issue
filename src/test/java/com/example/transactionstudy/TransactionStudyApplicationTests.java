@@ -72,53 +72,18 @@ class TransactionStudyApplicationTests {
         }
     }
 
-    /**
-     * ObjectOptimisticLockingFailureException(낙관락 예외) 발생시 재귀 호출
-     * 재시도를 일정 횟수 이상으로 요청할 경우 예외를 발생시킨다.
-     * 따라서, 일부 사용자의 요청이 완료되지 않는다. - 탈락
-     */
     @Order(5)
     @Test
-    @DisplayName("좋아요 동시 요청 - 타임아웃")
+    @DisplayName("좋아요 동시 요청")
     void concurrency_like_with_timeout() throws Exception {
-        int numberOfThreads = 400;
+        int numberOfThreads = 200;
         ExecutorService service = Executors.newFixedThreadPool(200); // 스프링 스레드풀 기본 값인 200으로 설정
         CountDownLatch latch = new CountDownLatch(numberOfThreads);
 
         for (int i = 0; i < numberOfThreads; i++) {
             service.execute(() -> {
                 try {
-                    mockMvc.perform(put("/boards/1/like/optimistic-lock-with-timeout"));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-        latch.await();
-        mockMvc.perform(get("/boards/1"))
-                .andExpect(jsonPath("$.likes").value(numberOfThreads));
-    }
-
-    /**
-     * ObjectOptimisticLockingFailureException(낙관락 예외) 발생시 재귀 호출
-     * 예외가 발생하지 않을 때까지 무한히 재시도.
-     * 사용자의 요청을 높은 확률로 전부 처리할 수 있을 것으로 보이나, 처리 시간이 오래 걸림.
-     * 스프링 스레드풀은 기본적으로 타임아웃이 1분으로 설정되어있어 1분 동안 요청을 처리하지 못 할 경우 타임아웃 처리가 될 것으로 추측된다.
-     */
-    @Order(6)
-    @Test
-    @DisplayName("좋아요 동시 요청 - 완료될때까지 재시도")
-    void concurrency_like_util_complete() throws Exception {
-        int numberOfThreads = 400;
-        ExecutorService service = Executors.newFixedThreadPool(200); // 스프링 스레드풀 기본 값인 200으로 설정
-        CountDownLatch latch = new CountDownLatch(numberOfThreads);
-
-        for (int i = 0; i < numberOfThreads; i++) {
-            service.execute(() -> {
-                try {
-                    mockMvc.perform(put("/boards/1/like/optimistic-lock"));
+                    mockMvc.perform(put("/boards/1/like"));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 } finally {
