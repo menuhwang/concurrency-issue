@@ -96,3 +96,87 @@
   - 따라서, 성능이 매우 떨어진다.
 
 #### 낙관락 (Optimistic Lock) && 비관락 (Pessimistic Lock)
+
+## DB 트랜잭션 락 테스트
+
+### MySQL 트랜잭션 관련 쿼리문
+
+- 트랜잭션 목록 : `select * from information_schema.innodb_trx;`
+- 트랜잭션 대기 목록 : `select * from sys.innodb_lock_waits;`
+
+### 테스트 케이스
+- 상황 1 : T1이 shard락을 걸고 조회하는 도중 T2가 shard락을 걸고 조회하는 경우 (s락에 s락을 거는 경우)
+  - T1
+    ```sql
+    begin;
+    select *
+    from board
+    where id = 1
+    for share ;
+    ```
+  - T2
+    ```sql
+    begin;
+    select *
+    from board
+    where id = 1
+    for share ;
+    ```
+  - 결과
+    - waiting 없이 정상적으로 동작
+- 상황 2 : T1이 x락을 걸고 update 하는 도중 T2가 shard락을 걸고 조회하는 경우 (x락에 s락을 거는 경우)
+  - T1
+    ```sql
+    begin;
+    update board
+    set likes = likes + 1
+    where id = 1;
+    ```
+  - T2
+    ```sql
+    begin;
+    select *
+    from board
+    where id = 1
+    for share ;
+    ```
+  - 결과
+    - T2 blocking
+    - T1이 commit 또는 rollback되어 트랜잭션이 종료되면 T2 진행.
+- 상황 3 : T1이 x락을 걸고 update 하는 도중 T2가 락없이 조회하는 경우 (x락이 걸린 레코드를 락없이 조회하는 경우)
+  - T1
+    ```sql
+    begin;
+    update board
+    set likes = likes + 1
+    where id = 1;
+    ```
+  - T2
+    ```sql
+    begin;
+    select *
+    from board
+    where id = 1;
+    ```
+  - 결과
+    - waiting 없이 정상적으로 동작.
+    - T2는 T1이 커밋되기 전이므로 기존 데이터를 조회해옴. (Read Committed)
+- 상황 4 : T1이 s락을 걸고 조회하는 도중 T2가 x락을 걸고 update하는 경우 (s락에 x락을 거는 경우)
+  - T1
+    ```sql
+    begin;
+    select *
+    from board
+    where id = 1
+    for shard;
+    ```
+  - T2
+    ```sql
+    begin;
+    update board
+    set likes = likes + 1
+    where id = 1;
+    ```
+  - 결과
+    - T2 blocking
+    - T1이 종료되면 T2 진행.
